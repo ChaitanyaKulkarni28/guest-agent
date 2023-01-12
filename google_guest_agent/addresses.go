@@ -37,6 +37,7 @@ var (
 	interfaces        []net.Interface
 
 	defaultProtoID = "66"
+	defaultVlanID  = "@Google"
 )
 
 type addressMgr struct{}
@@ -86,19 +87,35 @@ func getForwardsFromRegistry(mac string) ([]string, error) {
 	return regFwdIPs, nil
 }
 
-func compareRoutes(configuredRoutes, desiredRoutes []string) (toAdd, toRm []string) {
-	for _, desiredRoute := range desiredRoutes {
-		if !utils.ContainsString(desiredRoute, configuredRoutes) {
-			toAdd = append(toAdd, desiredRoute)
-		}
+func addVlan(name, parent, id string) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("addVlan not implemented on windows")
 	}
+	// E.g: sudo ip link add link ens3 name ens3.1234@google type vlan id 1234
+	args := []string{"link", "add", "link", parent, "name", name, "type", "vlan", "id", id}
+	return runCmd(exec.Command("ip", args...))
+}
 
-	for _, configuredRoute := range configuredRoutes {
-		if !utils.ContainsString(configuredRoute, desiredRoutes) {
-			toRm = append(toRm, configuredRoute)
+func removeVlan(name string) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("removeVlan not implemented on windows")
+	}
+	// E.g: sudo ip link delete ens3.1234@google
+	args := []string{"link", "delete", name}
+	return runCmd(exec.Command("ip", args...))
+}
+
+// get agent configured VLANs
+func getConfiguredVlans() []string {
+	var configuredInterfaces []string
+	vlanID := config.Section("NetworkInterfaces").Key("vlan_id").MustString(defaultVlanID)
+
+	for _, i := range interfaces {
+		if strings.Contains(i.Name, vlanID) {
+			configuredInterfaces = append(configuredInterfaces, i.Name)
 		}
 	}
-	return toAdd, toRm
+	return configuredInterfaces
 }
 
 var badMAC []string
@@ -293,6 +310,17 @@ func (a *addressMgr) set() error {
 		return fmt.Errorf("error populating interfaces: %v", err)
 	}
 
+	type vlan struct {
+		ID     string
+		Parent string
+	}
+
+	var confInterfaceNames []string
+	var reqInterfaceNames []string
+	var reqNamedVlans map[string]*vlan
+
+	confInterfaceNames = getConfiguredVlans()
+
 	if config.Section("NetworkInterfaces").Key("setup").MustBool(true) {
 		if runtime.GOOS != "windows" {
 			logger.Debugf("Configure IPv6")
@@ -376,7 +404,7 @@ func (a *addressMgr) set() error {
 		forwardedIPs = trimSuffix(forwardedIPs)
 		wantIPs = trimSuffix(wantIPs)
 
-		toAdd, toRm := compareRoutes(forwardedIPs, wantIPs)
+		toAdd, toRm := utils.CompareSlice(forwardedIPs, wantIPs)
 
 		if len(toAdd) != 0 || len(toRm) != 0 {
 			var msg string
@@ -436,6 +464,47 @@ func (a *addressMgr) set() error {
 		if runtime.GOOS == "windows" {
 			if err := writeRegMultiString(addressKey, ni.Mac, registryEntries); err != nil {
 				logger.Errorf("error writing registry: %s", err)
+			}
+		}
+
+		if runtime.GOOS != "windows" {
+			// get required VLANs on current interface
+			for _, vnic := range ni.VlanNics {
+				vlanID := config.Section("NetworkInterfaces").Key("vlan_id").MustString(defaultVlanID)
+				name := fmt.Sprintf("%s.%s%s", iface.Name, vnic.VlanID, vlanID)
+				reqInterfaceNames = append(reqInterfaceNames, name)
+				reqNamedVlans[name] = &vlan{ID: vnic.VlanID.String(), Parent: iface.Name}
+			}
+		}
+	}
+
+	// Add/remove VLANs
+	// TODO: Check if we still want to proceed if one add/remove VLAN fails?
+	if runtime.GOOS != "windows" {
+		toAddVlans, toRmVlans := utils.CompareSlice(confInterfaceNames, reqInterfaceNames)
+
+		if len(toAddVlans) != 0 || len(toRmVlans) != 0 {
+			logger.Debugf("Changing VLANs from %q to %q", confInterfaceNames, reqInterfaceNames)
+		}
+
+		if len(toAddVlans) != 0 {
+			logger.Debugf("Adding VLAN(s) %q", toAddVlans)
+		}
+
+		for _, vlan := range toAddVlans {
+			tmp := reqNamedVlans[vlan]
+			if err := addVlan(vlan, tmp.Parent, tmp.ID); err != nil {
+				logger.Errorf("error configuring vlan: %s", err)
+			}
+		}
+
+		if len(toRmVlans) != 0 {
+			logger.Debugf("Removing VLAN(s) %q", toRmVlans)
+		}
+
+		for _, vlan := range toRmVlans {
+			if err := removeVlan(vlan); err != nil {
+				logger.Errorf("error removing vlan: %s", err)
 			}
 		}
 	}

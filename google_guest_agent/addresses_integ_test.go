@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//go:build integration
 // +build integration
 
 package main
@@ -24,6 +25,60 @@ import (
 )
 
 const testIp = "192.168.0.0"
+
+func TestAddAndRemoveVlan(t *testing.T) {
+	metdata, err := getMetadata(context.Context(), false)
+	if err != nil {
+		t.Fatalf("failed to get metadata, err %v", err)
+	}
+	iface, err := getInterfaceByMAC(metdata.Instance.NetworkInterfaces[0].Mac)
+	if err != nil {
+		t.Fatalf("failed to get interface from mac, err %v", err)
+	}
+	id := "1234"
+	name := fmt.Sprintf("%s.%s%s", iface.Name, id, defaultVlanID)
+
+	// test add vlan
+	if err := addVlan(name, iface.Name, id); err != nil {
+		t.Fatalf("failed to add vlan, err %v", err)
+	}
+	interfaces, err = net.Interfaces()
+	if err != nil {
+		t.Fatalf("failed to get interfaces, err %v", err)
+	}
+	found := false
+	for _, i := range interfaces {
+		if i.Name == name {
+			found = true
+			break
+		}
+	}
+
+	if found == false {
+		t.Fatalf("VLAN %s should be present but does not exist", name)
+	}
+
+	// test remove vlan
+	if err := removeVlan(name); err != nil {
+		t.Fatalf("failed to remove vlan, err %v", err)
+	}
+
+	interfaces, err = net.Interfaces()
+	if err != nil {
+		t.Fatalf("failed to get interfaces, err %v", err)
+	}
+	found := false
+	for _, i := range interfaces {
+		if i.Name == name {
+			found = true
+			break
+		}
+	}
+
+	if found == true {
+		t.Fatalf("VLAN %s should be removed but exists", name)
+	}
+}
 
 func TestAddAndRemoveLocalRoute(t *testing.T) {
 	metdata, err := getMetadata(context.Context(), false)

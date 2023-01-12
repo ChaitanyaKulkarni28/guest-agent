@@ -16,40 +16,32 @@ package main
 
 import (
 	"encoding/json"
+	"net"
 	"reflect"
 	"testing"
 
 	"github.com/go-ini/ini"
 )
 
-func TestCompareRoutes(t *testing.T) {
+func TestGetConfiguredVlans(t *testing.T) {
+	config = ini.Empty()
+
+	var emptySlice []string
+
 	var tests = []struct {
-		forwarded, metadata, wantAdd, wantRm []string
+		ifaces     []net.Interface
+		wantIfaces []string
 	}{
-		// These should return toAdd:
-		// In Md, not present
-		{nil, []string{"1.2.3.4"}, []string{"1.2.3.4"}, nil},
-		{nil, []string{"1.2.3.4", "5.6.7.8"}, []string{"1.2.3.4", "5.6.7.8"}, nil},
-
-		// These should return toRm:
-		// Present, not in Md
-		{[]string{"1.2.3.4"}, nil, nil, []string{"1.2.3.4"}},
-		{[]string{"1.2.3.4", "5.6.7.8"}, []string{"5.6.7.8"}, nil, []string{"1.2.3.4"}},
-
-		// These should return nil, nil:
-		// Present, in Md
-		{[]string{"1.2.3.4"}, []string{"1.2.3.4"}, nil, nil},
-		{[]string{"1.2.3.4", "5.6.7.8"}, []string{"1.2.3.4", "5.6.7.8"}, nil, nil},
-		{[]string{"1.2.3.4", "5.6.7.8"}, []string{"1.2.3.4", "5.6.7.8"}, nil, nil},
+		{[]net.Interface{{Name: "ens3.1234"}, {Name: "ens4.5678@Google"}}, []string{"ens4.5678@Google"}},
+		{[]net.Interface{}, emptySlice},
+		{[]net.Interface{{Name: "ens3.1234"}, {Name: "ens4.5678"}}, emptySlice},
 	}
 
-	for idx, tt := range tests {
-		toAdd, toRm := compareRoutes(tt.forwarded, tt.metadata)
-		if !reflect.DeepEqual(tt.wantAdd, toAdd) {
-			t.Errorf("case %d: toAdd does not match expected: forwarded: %q, metadata: %q, got: %q, want: %q", idx, tt.forwarded, tt.metadata, toAdd, tt.wantAdd)
-		}
-		if !reflect.DeepEqual(tt.wantRm, toRm) {
-			t.Errorf("case %d: toRm does not match expected: forwarded: %q, metadata: %q, got: %q, want: %q", idx, tt.forwarded, tt.metadata, toRm, tt.wantRm)
+	for _, tt := range tests {
+		interfaces = tt.ifaces
+		got := getConfiguredVlans()
+		if !reflect.DeepEqual(got, tt.wantIfaces) {
+			t.Errorf("TestGetConfiguredVlans failed: expected - %q, got - %q", tt.wantIfaces, got)
 		}
 	}
 }

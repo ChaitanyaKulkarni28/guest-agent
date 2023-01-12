@@ -96,6 +96,11 @@ type networkInterfaces struct {
 	IPAliases         []string
 	Mac               string
 	DHCPv6Refresh     string
+	VlanNics          []vlanNic
+}
+
+type vlanNic struct {
+	VlanID json.Number
 }
 
 type project struct {

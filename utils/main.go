@@ -26,6 +26,22 @@ import (
 	"github.com/tarm/serial"
 )
 
+// CompareSlice finds the diff in slices and returns items to be removed or added
+func CompareSlice(gotItems, wantItems []string) (toAdd, toRm []string) {
+	for _, item := range wantItems {
+		if !ContainsString(item, gotItems) {
+			toAdd = append(toAdd, item)
+		}
+	}
+
+	for _, item := range gotItems {
+		if !ContainsString(item, wantItems) {
+			toRm = append(toRm, item)
+		}
+	}
+	return toAdd, toRm
+}
+
 // ContainsString checks for the presence of a string in a slice.
 func ContainsString(s string, ss []string) bool {
 	for _, a := range ss {
