@@ -20,6 +20,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ import (
 const testIp = "192.168.0.0"
 
 func TestAddAndRemoveVlan(t *testing.T) {
-	metdata, err := getMetadata(context.Context(), false)
+	metdata, err := getMetadata(context.Background(), false)
 	if err != nil {
 		t.Fatalf("failed to get metadata, err %v", err)
 	}
@@ -67,7 +68,7 @@ func TestAddAndRemoveVlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get interfaces, err %v", err)
 	}
-	found := false
+	found = false
 	for _, i := range interfaces {
 		if i.Name == name {
 			found = true
@@ -81,7 +82,7 @@ func TestAddAndRemoveVlan(t *testing.T) {
 }
 
 func TestAddAndRemoveLocalRoute(t *testing.T) {
-	metdata, err := getMetadata(context.Context(), false)
+	metdata, err := getMetadata(context.Background(), false)
 	if err != nil {
 		t.Fatalf("failed to get metadata, err %v", err)
 	}
@@ -115,9 +116,9 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 	if err := removeLocalRoute(testIp, iface.Name); err != nil {
 		t.Fatalf("add test local route should not failed")
 	}
-	res, err := getLocalRoutes(iface.Name)
+	res, err = getLocalRoutes(iface.Name)
 	if err != nil {
-		t.Fatalf("ip route list should not failed, err %s", res.err)
+		t.Fatalf("ip route list should not failed, err %s", err)
 	}
 
 	for _, route := range res {
@@ -128,7 +129,7 @@ func TestAddAndRemoveLocalRoute(t *testing.T) {
 }
 
 func TestGetLocalRoute(t *testing.T) {
-	metdata, err := getMetadata(context.Context(), false)
+	metdata, err := getMetadata(context.Background(), false)
 	if err != nil {
 		t.Fatalf("failed to get metadata, err %v", err)
 	}
@@ -145,9 +146,9 @@ func TestGetLocalRoute(t *testing.T) {
 		t.Fatalf("get local routes should not failed, err %v", err)
 	}
 	if len(routes) != 1 {
-		t.Fatal("find unexpected local route %s.", routes[0])
+		t.Fatalf("find unexpected local route %s.", routes[0])
 	}
 	if routes[0] != testIp {
-		t.Fatal("find unexpected local route %s.", routes[0])
+		t.Fatalf("find unexpected local route %s.", routes[0])
 	}
 }

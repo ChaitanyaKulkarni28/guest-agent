@@ -37,7 +37,7 @@ var (
 	interfaces        []net.Interface
 
 	defaultProtoID = "66"
-	defaultVlanID  = "@Google"
+	defaultVlanID  = "@GVlan"
 )
 
 type addressMgr struct{}
