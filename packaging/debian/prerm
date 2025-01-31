@@ -1,0 +1,14 @@
+#!/bin/sh -e
+
+SERVICE_NAME="google-guest-agent-manager"
+
+if [ "$1" = "purge" -o "$1" = "remove" ] ; then
+    echo "Running pre-rem script for $1"
+	if systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo "$SERVICE_NAME is running, stopping..."
+        systemctl stop "$SERVICE_NAME"
+    fi
+    ggactl_plugin_cleanup all || :
+fi
+
+#DEBHELPER#
